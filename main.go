@@ -51,9 +51,14 @@ type Kimsufi struct {
 	Version string      `json:"version"`
 }
 
+type AvalibleServers struct {
+	Server, Zone string
+}
+
 var logger log.Logger
 var logfile = flag.String("l", "kimsufi.log", "Log file")
 var debug = flag.Bool("d", false, "Debug mode")
+var configfile = flag.String("c", "kimsufi.conf", "Configuration file")
 
 func main() {
 	/*
@@ -65,6 +70,8 @@ func main() {
 	 */
 	setLogger()
 
+	loadConfig(*configfile)
+
 	response, err := http.Get("https://ws.ovh.com/dedicated/r2/ws.dispatcher/getAvailability2")
 	if err != nil {
 		fmt.Printf("%s", err)
@@ -73,18 +80,46 @@ func main() {
 		defer response.Body.Close()
 		contents, err := ioutil.ReadAll(response.Body)
 		if err != nil {
-			fmt.Printf("%s", err)
-			os.Exit(1)
+			logger.Warn(err.Error())
 		}
 		var m Kimsufi
 		err = json.Unmarshal(contents, &m)
-		fmt.Printf("%v\n", m)
+
 		if err != nil {
-			fmt.Printf("%s", err)
+			logger.Warn(err.Error())
 			os.Exit(1)
 		}
+		Avalible := make(map[int]AvalibleServers)
 
-		fmt.Printf("%v\n", string(contents))
+		for _, value := range m.Answer.Availability {
+
+			if serverName, ok := ServerTypes[value.Reference]; ok {
+				for _, zone := range value.Zones {
+					if zone.Availability == "1H-high" {
+
+						Avalible[len(Avalible)+1] = AvalibleServers{Server: serverName, Zone: zone.Zone}
+						//fmt.Printf("Serwer jest dostępny ! %[2]d ------ %[1]d\n", serverName, zone)
+					}
+				}
+			}
+
+		}
+
+		FindServers(Avalible)
+
+	}
+}
+
+func FindServers(Servers map[int]AvalibleServers) {
+	for _, server := range Servers {
+		for _, s := range Config.Notifier.Server {
+
+			if s == server.Server {
+				fmt.Print("Ślpij gołębia.")
+
+			}
+
+		}
 
 	}
 }
